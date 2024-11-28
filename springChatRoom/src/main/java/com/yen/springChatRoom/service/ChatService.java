@@ -1,7 +1,6 @@
 package com.yen.springChatRoom.service;
 
 import com.yen.springChatRoom.bean.ChatMessage;
-import com.yen.springChatRoom.controller.ChatController;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.Payload;

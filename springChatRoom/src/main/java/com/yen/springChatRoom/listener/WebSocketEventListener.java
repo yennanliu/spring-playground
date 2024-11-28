@@ -19,59 +19,68 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 @Component
 public class WebSocketEventListener {
 
-    @Value("${server.port}")
-    private String serverPort;
+  @Value("${server.port}")
+  private String serverPort;
 
-    @Value("${redis.set.onlineUsers}")
-    private String onlineUsers;
+  @Value("${redis.set.onlineUsers}")
+  private String onlineUsers;
 
-    @Value("${redis.channel.userStatus}")
-    private String userStatus;
+  @Value("${redis.channel.userStatus}")
+  private String userStatus;
 
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+  @Autowired private RedisTemplate<String, String> redisTemplate;
 
-    @Autowired
-    private SimpMessageSendingOperations messagingTemplate;
+  @Autowired private SimpMessageSendingOperations messagingTemplate;
 
-    // connect
-//    @EventListener
-//    public void handleWebSocketConnectListener(SessionConnectedEvent event){
-//
-//        LOGGER.info("Receive a new web socket connection!");
-//    }
-    public void handleWebSocketConnectListener(SessionConnectedEvent event) {
+  // connect
+  //    @EventListener
+  //    public void handleWebSocketConnectListener(SessionConnectedEvent event){
+  //
+  //        LOGGER.info("Receive a new web socket connection!");
+  //    }
+  public void handleWebSocketConnectListener(SessionConnectedEvent event) {
 
-        InetAddress localHost;
-        try {
-            localHost = Inet4Address.getLocalHost();
-            log.info("Received a new web socket connection from:" + localHost.getHostAddress() + ":" + serverPort);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
+    InetAddress localHost;
+    try {
+      localHost = Inet4Address.getLocalHost();
+      log.info(
+          "Received a new web socket connection from:"
+              + localHost.getHostAddress()
+              + ":"
+              + serverPort);
+    } catch (Exception e) {
+      log.error(e.getMessage(), e);
     }
+  }
 
+  // disconnect
+  @EventListener
+  public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
 
-    // disconnect
-    @EventListener
-    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
+    StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
 
-        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
+    log.info(">>> (handleWebSocketDisconnectListener) headerAccessor = " + headerAccessor);
 
-        String username = (String) headerAccessor.getSessionAttributes().get("username");
+    String username = (String) headerAccessor.getSessionAttributes().get("username");
+    String receiver = (String) headerAccessor.getSessionAttributes().get("receiver");
 
-        if (username != null) {
-            log.info("User Disconnected : " + username);
-            ChatMessage chatMessage = new ChatMessage();
-            chatMessage.setType(ChatMessage.MessageType.LEAVE);
-            chatMessage.setSender(username);
-            try {
-                redisTemplate.opsForSet().remove(onlineUsers, username);
-                redisTemplate.convertAndSend(userStatus, JsonUtil.parseObjToJson(chatMessage));
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-            }
-        }
+    if (username != null) {
+      log.info("User Disconnected : " + username);
+      ChatMessage chatMessage = new ChatMessage();
+      chatMessage.setType(ChatMessage.MessageType.LEAVE);
+      chatMessage.setSender(username);
+
+      // TODO : double check ??? (for private chat)
+      if (receiver != null) {
+        chatMessage.setReceiver(receiver);
+      }
+
+      try {
+        redisTemplate.opsForSet().remove(onlineUsers, username);
+        redisTemplate.convertAndSend(userStatus, JsonUtil.parseObjToJson(chatMessage));
+      } catch (Exception e) {
+        log.error(e.getMessage(), e);
+      }
     }
-
+  }
 }

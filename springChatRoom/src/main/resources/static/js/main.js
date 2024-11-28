@@ -1,9 +1,5 @@
 'use strict';
 
-// Ref
-// - https://www.callicoder.com/spring-boot-websocket-chat-example/
-// - https://blog.csdn.net/qqxx6661/article/details/98883166
-
 var usernamePage = document.querySelector('#username-page');
 var chatPage = document.querySelector('#chat-page');
 var usernameForm = document.querySelector('#usernameForm');
@@ -11,6 +7,7 @@ var messageForm = document.querySelector('#messageForm');
 var messageInput = document.querySelector('#message');
 var messageArea = document.querySelector('#messageArea');
 var connectingElement = document.querySelector('.connecting');
+var privateMessageArea = document.querySelector('#privateMessageArea');  // Added for private message area
 
 var stompClient = null;
 var username = null;
@@ -19,6 +16,15 @@ var colors = [
     '#2196F3', '#32c787', '#00BCD4', '#ff5652',
     '#ffc107', '#ff85af', '#FF9800', '#39bbb0'
 ];
+
+var senderUsername = null; // Global variable to store the sender's username
+var targetUsername = null; // Global variable to store the receiver's username
+
+// Function to initialize the sender's username
+function initializeSender(username) {
+    senderUsername = username; // Set the sender's username
+    console.log('>>> Sender initialized as:', senderUsername);
+}
 
 function connect(event) {
     username = document.querySelector('#name').value.trim();
@@ -35,14 +41,9 @@ function connect(event) {
     event.preventDefault();
 }
 
-
 function onConnected() {
-
     // Subscribe to the Public Topic
     stompClient.subscribe('/topic/public', onMessageReceived);
-
-    // Subscribe to the "/private" destination // TODO : make it general
-    //stompClient.subscribe('/private/user123', onPrivateMessageReceived);
 
     // Tell your username to the server
     stompClient.send("/app/chat.addUser",
@@ -53,19 +54,18 @@ function onConnected() {
     connectingElement.classList.add('hidden');
 }
 
-
 function onError(error) {
     console.log(">>> error = " + error)
     connectingElement.textContent = 'Could not connect to WebSocket server. Please refresh this page to try again!';
     connectingElement.style.color = 'red';
 }
 
-
 function sendMessage(event) {
     var messageContent = messageInput.value.trim();
     if(messageContent && stompClient) {
         var chatMessage = {
             sender: username,
+            receiver: targetUsername,
             content: messageInput.value,
             type: 'CHAT'
         };
@@ -75,13 +75,26 @@ function sendMessage(event) {
     event.preventDefault();
 }
 
+function sendPrivateMessage(event, receiver) {
+    var messageContent = messageInput.value.trim();
+    if (messageContent && stompClient) {
+        var privateMessage = {
+            sender: username,
+            receiver: receiver,
+            content: messageInput.value,
+            type: 'CHAT'
+        };
+        stompClient.send("/app/chat.sendPrivateMessage", {}, JSON.stringify(privateMessage));  // Send private message
+        messageInput.value = '';
+    }
+    event.preventDefault();
+}
 
 function onMessageReceived(payload) {
     var message = JSON.parse(payload.body);
-
     var messageElement = document.createElement('li');
 
-    if(message.type === 'JOIN') {
+    if (message.type === 'JOIN') {
         messageElement.classList.add('event-message');
         message.content = message.sender + ' joined!';
     } else if (message.type === 'LEAVE') {
@@ -113,6 +126,34 @@ function onMessageReceived(payload) {
     messageArea.scrollTop = messageArea.scrollHeight;
 }
 
+// Private message handler
+function onPrivateMessageReceived(payload) {
+    var message = JSON.parse(payload.body);
+
+    var messageElement = document.createElement('li');
+    messageElement.classList.add('private-message');
+
+    var avatarElement = document.createElement('i');
+    var avatarText = document.createTextNode(message.sender[0]);
+    avatarElement.appendChild(avatarText);
+    avatarElement.style['background-color'] = getAvatarColor(message.sender);
+
+    messageElement.appendChild(avatarElement);
+
+    var usernameElement = document.createElement('span');
+    var usernameText = document.createTextNode(message.sender);
+    usernameElement.appendChild(usernameText);
+    messageElement.appendChild(usernameElement);
+
+    var textElement = document.createElement('p');
+    var messageText = document.createTextNode(message.content);
+    textElement.appendChild(messageText);
+
+    messageElement.appendChild(textElement);
+
+    privateMessageArea.appendChild(messageElement);
+    privateMessageArea.scrollTop = privateMessageArea.scrollHeight;
+}
 
 function getAvatarColor(messageSender) {
     var hash = 0;
@@ -123,9 +164,9 @@ function getAvatarColor(messageSender) {
     return colors[index];
 }
 
-// online user
+// Online user functions
 function fetchUserList() {
-    fetch('/user/online_user') // Replace with the actual endpoint URL
+    fetch('/user/online_user')
         .then(response => response.json())
         .then(data => {
             updateOnlineUsers(data);
@@ -135,111 +176,87 @@ function fetchUserList() {
         });
 }
 
+// Function to update the online users list and add chat functionality
 function updateOnlineUsers(users) {
     const userList = document.getElementById('userList');
     userList.innerHTML = ''; // Clear the list first
-
-//    users.forEach(user => {
-//        const listItem = document.createElement('li');
-//        listItem.textContent = user;
-//        userList.appendChild(listItem);
-//    });
 
     users.forEach(user => {
         const listItem = document.createElement('li');
 
         // Create a span for the green light
         const greenLight = document.createElement('span');
-        greenLight.classList.add('green-light'); // You may need to define a CSS class for styling
-
-        // Append the green light span to the list item
+        greenLight.classList.add('green-light'); // Define CSS for this class
         listItem.appendChild(greenLight);
 
         // Create a span for the username
         const usernameSpan = document.createElement('span');
         usernameSpan.textContent = user;
-
-        // Append the username span to the list item
         listItem.appendChild(usernameSpan);
 
         // Create a "Chat" button
         const chatButton = document.createElement('button');
         chatButton.textContent = 'Chat';
-        chatButton.addEventListener('click', () => startChat(user)); // Replace with your chat initiation logic
 
-        // Append the "Chat" button to the list item
+        // Add event listener to update targetUsername and start private chat
+        chatButton.addEventListener('click', () => {
+            targetUsername = user; // Set the target user for private chat
+            console.log('>>> Selected targetUsername:', targetUsername);
+            console.log('>>> Sender username:', senderUsername);
+            startPrivateChat(user); // Initiate private chat with the clicked user
+        });
+
+        // Append the chat button to the list item
         listItem.appendChild(chatButton);
 
         // Append the list item to the user list
         userList.appendChild(listItem);
     });
-
 }
 
-// Function to handle chat initiation
-function startChat(username) {
-    // Open a popup window for the chat
+function startPrivateChat(username) {
+    // Open a popup window for the private chat
     const popupWindow = window.open('', '_blank', 'width=400,height=300');
-
-    // Add your logic to customize the popup window content
     popupWindow.document.write('<html><head><title>Chat with ' + username + '</title></head><body>');
     popupWindow.document.write('<h2>Chat with ' + username + '</h2>');
-    popupWindow.document.write('<div id="chatMessages"></div>');
-    popupWindow.document.write('<input type="text" id="messageInput" placeholder="Type a message..."/>');
-    popupWindow.document.write('<button onclick="sendMessage()">Send</button>');
+    popupWindow.document.write('<div id="privateChatMessages"></div>');
+    popupWindow.document.write('<input type="text" id="privateMessageInput" placeholder="Type a message..."/>');
+    popupWindow.document.write('<button id="sendButton">Send</button>');
     popupWindow.document.write('</body></html>');
 
-    // Function to send a message from the popup window
-    popupWindow.sendMessage = function() {
+    console.log(">>> startPrivateChat username = " + username);
 
-        console.log(">>> popupWindow.sendMessage")
-        const messageInput = popupWindow.document.getElementById('messageInput');
-        const chatMessages = popupWindow.document.getElementById('chatMessages');
+    // Once the popup loads, attach the send message logic
+    popupWindow.unload = function () {
+        const sendButton = popupWindow.document.getElementById('sendButton');
+        const messageInput = popupWindow.document.getElementById('privateMessageInput');
+        const privateChatMessages = popupWindow.document.getElementById('privateChatMessages');
 
-        const message = messageInput.value.trim();
-        if (message !== '') {
-            // Customize the way messages are displayed in the popup window
-            chatMessages.innerHTML += '<p><strong>You:</strong> ' + message + '</p>';
+        sendButton.addEventListener('click', () => {
+            const message = messageInput.value.trim();
+            if (message !== '') {
+                // Extract receiver (username) from the popup title
+                const receiver = popupWindow.document.title.replace('Chat with ', '').trim();
 
-            // TODO: Fetch and display chat history
-            //fetchChatHistory(username, chatMessages);
+                privateChatMessages.innerHTML += '<p><strong>You:</strong> ' + message + '</p>';
+                console.log('>>> Sending private message to:', receiver);
 
-            // TODO : implement below in BE
-            // Add your logic to send the message to the other user
-            // Example: stompClient.send('/app/private/' + username, {}, JSON.stringify({ sender: 'You', content: message, type: 'CHAT' }));
+                // Send the message via STOMP
+                stompClient.send('/app/chat.sendPrivateMessage', {}, JSON.stringify({
+                    sender: senderUsername, // Global sender username
+                    receiver: 'zzzz', // username // Extracted receiver from popup title
+                    content: message,
+                    type: 'CHAT'
+                }));
 
-            // send msg to BE
-            //stompClient.subscribe('/app/private/' + username, onPrivateMessageReceived);
-            stompClient.subscribe('/app/private/' + username);
-            console.log(">>> send msg to /app/private/" + username + ", message = " + message);
-            stompClient.send('/app/private/' + username, {}, JSON.stringify({ sender: 'You', content: message, type: 'CHAT' }));
-
-            // Clear the input field
-            messageInput.value = '';
-        }
+                messageInput.value = ''; // Clear the input field
+            }
+        });
     };
 }
 
-// Function to fetch and display chat history
-function fetchChatHistory(username, chatMessages) {
-    fetch('/app/chat/history/' + username)
-        .then(response => response.json())
-        .then(history => {
-            history.forEach(message => {
-                chatMessages.innerHTML += '<p><strong>' + message.sender + ':</strong> ' + message.content + '</p>';
-            });
-        })
-        .catch(error => {
-            console.error('Error fetching chat history: ', error);
-        });
-}
+// Periodically update the online users list
+setInterval(fetchUserList, 5000);
 
-
-// Call the fetchUserList function to initially populate the user list
-fetchUserList();
-
-// You can also periodically update the user list using a timer or other events
-setInterval(fetchUserList, 5000); // Update every 5 seconds (adjust as needed)
-
-usernameForm.addEventListener('submit', connect, true)
-messageForm.addEventListener('submit', sendMessage, true)
+usernameForm.addEventListener('submit', connect, true);
+messageForm.addEventListener('submit', sendMessage, true);

@@ -17,29 +17,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/user")
 public class UserController {
 
-    private final String onlineUserKey = "websocket.onlineUsers";
-    @Value("${redis.channel.msgToAll}")
-    private String msgToAll;
-    @Value("${redis.set.onlineUsers}")
-    private String onlineUsers;
-    @Value("${redis.channel.userStatus}")
-    private String userStatus;
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
+  private final String onlineUserKey = "websocket.onlineUsers";
 
-    @GetMapping("/online_user")
-    public List<String> getOnlineUser(){
+  @Value("${redis.channel.msgToAll}")
+  private String msgToAll;
 
-        Set<String> resultSet = redisTemplate.opsForSet().members(onlineUserKey);
-        log.info("(getOnlineUser) resultSet = " + resultSet);
-        // TODO : optimize below
-        OnlineUser onlineUser = new OnlineUser();
-        List<String> users = new ArrayList<>();
-        resultSet.forEach(x -> {
-            users.add(x);
+  @Value("${redis.set.onlineUsers}")
+  private String onlineUsers;
+
+  @Value("${redis.channel.userStatus}")
+  private String userStatus;
+
+  @Autowired private RedisTemplate<String, String> redisTemplate;
+
+  @GetMapping("/online_user")
+  public List<String> getOnlineUser() {
+
+    Set<String> resultSet = redisTemplate.opsForSet().members(onlineUserKey);
+    log.info("(getOnlineUser) resultSet = " + resultSet);
+    // TODO : optimize below
+    OnlineUser onlineUser = new OnlineUser();
+    List<String> users = new ArrayList<>();
+    resultSet.forEach(
+        x -> {
+          users.add(x);
         });
-        onlineUser.setUsers(users);
-        return onlineUser.getUsers();
-    }
-
+    onlineUser.setUsers(users);
+    return onlineUser.getUsers();
+  }
 }

@@ -4,6 +4,7 @@ public class ChatMessage {
   private MessageType type;
   private String content;
   private String sender;
+  private String receiver;
 
   public MessageType getType() {
     return type;
@@ -29,6 +30,14 @@ public class ChatMessage {
     this.sender = sender;
   }
 
+  public String getReceiver() {
+    return receiver;
+  }
+
+  public void setReceiver(String sender) {
+    this.receiver = receiver;
+  }
+
   @Override
   public String toString() {
     return "ChatMessage{"
@@ -39,6 +48,9 @@ public class ChatMessage {
         + '\''
         + ", sender='"
         + sender
+        + '\''
+        + ", receiver='"
+        + receiver
         + '\''
         + '}';
   }
